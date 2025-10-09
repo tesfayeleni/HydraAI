@@ -51,13 +51,16 @@ if uploaded_file is not None:
        # st.components.v1.html(shap_html.html(), height=300)
     
     # --- NETWORK VISUALIZATION ---
-    # Load your water network
-    net = wntr.network.WaterNetworkModel("your_network.inp")
-    
-    # Get nodes predicted as leaks
-    leak_nodes = data.loc[data["predicted_leak"] == 1, "node"].tolist()
-    
-    # Plot network highlighting leak nodes
-    fig, ax = plt.subplots(figsize=(8,6))
-    wntr.graphics.plot_network(net, leak_nodes=leak_nodes, node_size=50, link_width=1.5, ax=ax)
-    st.pyplot(fig)
+    # --- NETWORK VISUALIZATION ---
+    with st.spinner("Plotting network, please wait..."):
+        # Load network (you can cache this to avoid reloading every run)
+        net = wntr.network.WaterNetworkModel("your_network.inp")
+        
+        # Get nodes predicted as leaks
+        leak_nodes = data.loc[data["predicted_leak"] == 1, "node"].tolist()
+        
+        # Plot network highlighting leak nodes
+        fig, ax = plt.subplots(figsize=(8,6))
+        wntr.graphics.plot_network(net, leak_nodes=leak_nodes, node_size=50, link_width=1.5, ax=ax)
+        st.pyplot(fig)
+
