@@ -72,6 +72,12 @@ if uploaded_file is not None:
     
         # Plot with numeric node_attribute and a two-color colormap
         fig, ax = plt.subplots(figsize=(10, 7))
+
+        st.write(type(node_attr))
+        st.write(len(node_attr))
+        st.write(list(node_attr.items())[:10])
+
+        
         wntr.graphics.plot_network(
             net,
             node_attribute=node_attr,        # numeric Series {nodeid: value}
