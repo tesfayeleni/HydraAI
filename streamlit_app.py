@@ -14,7 +14,7 @@ def load_network(path):
 
 net = load_network("Net3.inp")  # load once and cache
 
---- LOAD MODEL ---
+#--- LOAD MODEL ---
 rf_model = joblib.load("rf_model.pkl")  # save after training using joblib.dump(rf_model, 'rf_model.pkl')
 
 # --- LOAD DATA ---
