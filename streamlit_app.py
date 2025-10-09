@@ -36,14 +36,14 @@ if uploaded_file is not None:
 
     
     # --- SHAP EXPLANATION ---
-    background = X_new[np.random.choice(X_new.shape[0], min(100, X_new.shape[0]), replace=False)]
-    explainer = shap.TreeExplainer(rf_model, data=background)
-    shap_values = explainer(X_new)
+   # background = X_new[np.random.choice(X_new.shape[0], min(100, X_new.shape[0]), replace=False)]
+    #explainer = shap.TreeExplainer(rf_model, data=background)
+   # shap_values = explainer(X_new)
     
-    st.write("Feature importance (global):")
-    fig, ax = plt.subplots()
-    shap.summary_plot(shap_values.values, X_new, feature_names=data.columns, plot_type="bar", show=False)
-    st.pyplot(fig)
+   # st.write("Feature importance (global):")
+   # fig, ax = plt.subplots()
+   # shap.summary_plot(shap_values.values, X_new, feature_names=data.columns, plot_type="bar", show=False)
+#    st.pyplot(fig)
 
 
     
@@ -67,9 +67,15 @@ if uploaded_file is not None:
     with st.spinner("Plotting network, please wait..."):
         # Get nodes predicted as leaks
         leak_nodes = data.loc[data["predicted_leak"] == 1, "node"].tolist()
+
+        st.write("leak_nodes:", leak_nodes)
+        st.write("Network nodes count:", len(net.node_name_list))
+
         
         # Plot network highlighting leak nodes
-        fig, ax = plt.subplots(figsize=(8,6))
-        wntr.graphics.plot_network(net, leak_nodes=leak_nodes, node_size=50, link_width=1.5, ax=ax)
+        node_colors = {node: 'red' for node in leak_nodes if node in net.node_name_list}
+        fig, ax = plt.subplots(figsize=(8, 6))
+        wntr.graphics.plot_network(net, node_attribute=node_colors, node_size=50, link_width=1.5, ax=ax)
         st.pyplot(fig)
+
 
