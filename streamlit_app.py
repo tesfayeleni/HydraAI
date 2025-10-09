@@ -30,29 +30,33 @@ if uploaded_file is not None:
     data["predicted_leak"] = y_pred
     st.dataframe(data)
 
-    # --- NETWORK VISUALIZATION ---
+   # --- NETWORK VISUALIZATION ---
     with st.spinner("Plotting network, please wait..."):
         # Ensure node names are strings and stripped
         data["node"] = data["node"].astype(str).str.strip()
         leak_nodes = data.loc[data["predicted_leak"] == 1, "node"].tolist()
         leak_nodes = [n.strip() for n in leak_nodes]
-
+    
         # Only keep leak nodes that exist in the WNTR network
         valid_leaks = [n for n in leak_nodes if n in net.node_name_list]
-
-        st.write("Predicted leak nodes (valid):", valid_leaks)
-
+        st.write(f"Predicted leak nodes (valid): {valid_leaks}")
+        st.write(f"Network nodes count: {len(net.node_name_list)}")
+    
         if valid_leaks:
-            # Map node colors
-            node_colors = {node: 'red' for node in valid_leaks}
-
-            # Plot the network
+            # Map *all* nodes to default color first
+            node_colors = {node: 'skyblue' for node in net.node_name_list}
+    
+            # Highlight predicted leak nodes in red
+            for node in valid_leaks:
+                node_colors[node] = 'red'
+    
+            # Plot network
             fig, ax = plt.subplots(figsize=(10, 7))
             wntr.graphics.plot_network(
                 net,
                 node_attribute=node_colors,
                 node_size=50,
-                link_width=1.5,
+                link_width=1.2,
                 ax=ax
             )
             st.pyplot(fig)
