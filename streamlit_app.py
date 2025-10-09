@@ -37,18 +37,18 @@ if uploaded_file is not None:
     st.pyplot(fig)
     
     # Optional: force plot for first flagged leak
-    idx = np.where(y_pred == 1)[0]
-    if len(idx) > 0:
-        i = idx[0]
-        st.write(f"SHAP explanation for leak at index {i}:")
-        shap_html = shap.force_plot(
-            base_value=shap_values.base_values[i, 1],
-            shap_values=shap_values.values[i, :, 1],
-            features=X_new[i],
-            feature_names=data.columns,
-            matplotlib=False
-        )
-        st.components.v1.html(shap_html.html(), height=300)
+    #idx = np.where(y_pred == 1)[0]
+    #if len(idx) > 0:
+        #i = idx[0]
+       # st.write(f"SHAP explanation for leak at index {i}:")
+       # shap_html = shap.force_plot(
+        #    base_value=shap_values.base_values[i, 1],
+         #   shap_values=shap_values.values[i, :, 1],
+          #  features=X_new[i],
+           # feature_names=data.columns,
+            #matplotlib=False
+       # )
+       # st.components.v1.html(shap_html.html(), height=300)
     
     # --- NETWORK VISUALIZATION ---
     # Load your water network
