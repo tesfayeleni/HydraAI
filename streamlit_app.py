@@ -31,34 +31,64 @@ if uploaded_file is not None:
     st.dataframe(data)
 
    # --- NETWORK VISUALIZATION ---
+    # --- NETWORK VISUALIZATION (robust) ---
     with st.spinner("Plotting network, please wait..."):
-        # Ensure node names are strings and stripped
+        # ensure node column exists and is string
         data["node"] = data["node"].astype(str).str.strip()
-        leak_nodes = data.loc[data["predicted_leak"] == 1, "node"].tolist()
-        leak_nodes = [n.strip() for n in leak_nodes]
+        leak_nodes_raw = data.loc[data["predicted_leak"] == 1, "node"].tolist()
+        st.write("Raw predicted leak nodes (from CSV):", leak_nodes_raw)
     
-        # Only keep leak nodes that exist in the WNTR network
-        valid_leaks = [n for n in leak_nodes if n in net.node_name_list]
-        st.write(f"Predicted leak nodes (valid): {valid_leaks}")
-        st.write(f"Network nodes count: {len(net.node_name_list)}")
+        # network node list
+        net_nodes = list(net.node_name_list)      # list of node ids used by WNTR
+        st.write(f"Network nodes count: {len(net_nodes)}")
+        st.write("Example network nodes:", net_nodes[:10])
     
-        if valid_leaks:
-            # Map *all* nodes to default color first
-            node_colors = {node: 'skyblue' for node in net.node_name_list}
+        # exact matches first
+        valid_leaks = [n for n in leak_nodes_raw if n in net_nodes]
+        unmatched = [n for n in leak_nodes_raw if n not in net_nodes]
     
-            # Highlight predicted leak nodes in red
-            for node in valid_leaks:
-                node_colors[node] = 'red'
+        # try fuzzy matching for the unmatched names (useful if CSV names are slightly different)
+        if unmatched:
+            import difflib
+            fuzzy_map = {}
+            for n in unmatched:
+                match = difflib.get_close_matches(n, net_nodes, n=1, cutoff=0.6)
+                if match:
+                    fuzzy_map[n] = match[0]
+                    valid_leaks.append(match[0])
+            st.write("Fuzzy-matched nodes (CSV -> network):", fuzzy_map)
     
-            # Plot network
-            fig, ax = plt.subplots(figsize=(10, 7))
-            wntr.graphics.plot_network(
-                net,
-                node_attribute=node_colors,
-                node_size=50,
-                link_width=1.2,
-                ax=ax
-            )
-            st.pyplot(fig)
-        else:
-            st.warning("No predicted leak nodes match the network nodes. Nothing to highlight.")
+        st.write("Final matched leak nodes:", valid_leaks)
+        st.write("Unmatched nodes (no mapping):", [n for n in leak_nodes_raw if n not in valid_leaks])
+    
+        # create a numeric attribute for ALL nodes (0 = normal, 1 = leak)
+        node_attr = pd.Series(0.0, index=net_nodes, dtype=float)
+        for n in valid_leaks:
+            node_attr.loc[n] = 1.0
+    
+        # quick sanity checks (will show in Streamlit)
+        st.write("Number of nodes flagged as leak (in network):", int((node_attr == 1.0).sum()))
+        st.write("Sample of nodes flagged:", node_attr[node_attr == 1.0].index.tolist()[:50])
+    
+        # Plot with numeric node_attribute and a two-color colormap
+        fig, ax = plt.subplots(figsize=(10, 7))
+        wntr.graphics.plot_network(
+            net,
+            node_attribute=node_attr,        # numeric Series {nodeid: value}
+            node_size=50,
+            node_cmap=['lightgray', 'red'],  # map 0->lightgray, 1->red
+            node_range=[0, 1],
+            link_width=1.2,
+            show_plot=False,                 # avoid plt.show(); we will use st.pyplot
+            ax=ax
+        )
+    
+        # add a simple legend
+        import matplotlib.patches as mpatches
+        handles = [
+            mpatches.Patch(color='red', label='Predicted leak'),
+            mpatches.Patch(color='lightgray', label='Normal')
+        ]
+        ax.legend(handles=handles, loc='upper right')
+    
+        st.pyplot(fig)
