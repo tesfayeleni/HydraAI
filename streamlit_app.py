@@ -7,7 +7,14 @@ import matplotlib.pyplot as plt
 import joblib  # to load your trained model
 import wntr    # for network visualization
 
-# --- LOAD MODEL ---
+# --- LOAD NETWORK WITH CACHING ---
+@st.cache_resource
+def load_network(path):
+    return wntr.network.WaterNetworkModel(path)
+
+net = load_network("Net3.inp")  # load once and cache
+
+--- LOAD MODEL ---
 rf_model = joblib.load("rf_model.pkl")  # save after training using joblib.dump(rf_model, 'rf_model.pkl')
 
 # --- LOAD DATA ---
@@ -25,6 +32,8 @@ if uploaded_file is not None:
     st.write("Predicted leaks (1 = leak):")
     data["predicted_leak"] = y_pred
     st.dataframe(data)
+
+
     
     # --- SHAP EXPLANATION ---
     background = X_new[np.random.choice(X_new.shape[0], min(100, X_new.shape[0]), replace=False)]
@@ -35,6 +44,8 @@ if uploaded_file is not None:
     fig, ax = plt.subplots()
     shap.summary_plot(shap_values.values, X_new, feature_names=data.columns, plot_type="bar", show=False)
     st.pyplot(fig)
+
+
     
     # Optional: force plot for first flagged leak
     #idx = np.where(y_pred == 1)[0]
@@ -49,13 +60,11 @@ if uploaded_file is not None:
             #matplotlib=False
        # )
        # st.components.v1.html(shap_html.html(), height=300)
+
     
-    # --- NETWORK VISUALIZATION ---
-    # --- NETWORK VISUALIZATION ---
+# --- NETWORK VISUALIZATION ---
+if uploaded_file is not None:
     with st.spinner("Plotting network, please wait..."):
-        # Load network (you can cache this to avoid reloading every run)
-        net = wntr.network.WaterNetworkModel("your_network.inp")
-        
         # Get nodes predicted as leaks
         leak_nodes = data.loc[data["predicted_leak"] == 1, "node"].tolist()
         
