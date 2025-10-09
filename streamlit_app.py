@@ -66,18 +66,27 @@ if uploaded_file is not None:
 if uploaded_file is not None:
     with st.spinner("Plotting network, please wait..."):
         # Ensure nodes are strings
-        data["node"] = data["node"].astype(str)
+        data["node"] = data["node"].astype(str).strip()
         leak_nodes = data.loc[data["predicted_leak"] == 1, "node"].tolist()
         leak_nodes = [n.strip() for n in leak_nodes]
+        valid_leaks = [n for n in leak_nodes if n in net.node_name_list]
 
         st.write("Predicted leak nodes:", leak_nodes)
         st.write("Network nodes count:", len(net.node_name_list))
         st.write("Valid leak nodes in network:", [n for n in leak_nodes if n in net.node_name_list])
 
+        st.write("CSV leak nodes:", leak_nodes)
+        st.write("Network nodes:", net.node_name_list[:10])  # preview
+        st.write("Valid leak nodes:", valid_leaks)
+
+
+
+        
         # Map node colors
         node_colors = {node: 'red' for node in leak_nodes if node in net.node_name_list}
-
-        if node_colors:
+        
+        if valid_leaks:
+            node_colors = {node: 'red' for node in valid_leaks}
             fig, ax = plt.subplots(figsize=(8, 6))
             wntr.graphics.plot_network(
                 net,
@@ -89,3 +98,4 @@ if uploaded_file is not None:
             st.pyplot(fig)
         else:
             st.warning("No predicted leak nodes match the network nodes. Nothing to highlight.")
+
