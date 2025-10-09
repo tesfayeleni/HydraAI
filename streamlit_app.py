@@ -73,13 +73,18 @@ if uploaded_file is not None:
 
         
         # Plot network highlighting leak nodes
+        # Only keep nodes that exist in the network
         node_colors = {node: 'red' for node in leak_nodes if node in net.node_name_list}
-        fig, ax = plt.subplots(figsize=(8, 6))
-        wntr.graphics.plot_network(
-            net,
-            leak_nodes=leak_nodes,  # pass the list of leak nodes directly
-            node_size=50,
-            link_width=1.5,
-            ax=ax
-        )
-        st.pyplot(fig)
+        
+        if node_colors:  # check to avoid empty dict crash
+            fig, ax = plt.subplots(figsize=(8, 6))
+            wntr.graphics.plot_network(
+                net,
+                node_attribute=node_colors,  # correct argument
+                node_size=50,
+                link_width=1.5,
+                ax=ax
+            )
+            st.pyplot(fig)
+        else:
+            st.warning("No predicted leak nodes match the network nodes. Nothing to highlight.")
