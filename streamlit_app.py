@@ -35,6 +35,7 @@ if uploaded_file is not None:
     st.dataframe(data)
     
     # --- NETWORK VISUALIZATION ---
+    # --- NETWORK VISUALIZATION ---
     with st.spinner("Plotting network, please wait..."):
         # 1) Normalize node strings
         data["node"] = data["node"].astype(str).str.strip()
@@ -43,32 +44,29 @@ if uploaded_file is not None:
         agg_leaks = data.groupby("node", as_index=False)["predicted_leak"].max()
         st.write("Aggregated leak status per node:")
         st.dataframe(agg_leaks.head(20))
-
-        
+    
         # 3) Leak nodes
-        leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()        
-st.write("Nodes with leak==1:", leak_nodes_raw)
-
-        
+        leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()
+        st.write("Nodes with leak==1:", leak_nodes_raw)
+    
         # 4) Network node names as strings
-      net_nodes = [str(n).strip() for n in net.node_name_list]  # ensure strings
+        net_nodes = [str(n).strip() for n in net.node_name_list]  # ensure strings
+    
+        # 5) Intersection: valid leaks
+        valid_leaks = [n for n in leak_nodes_raw if n in net_nodes]
+        unmatched = [n for n in leak_nodes_raw if n not in net_nodes]
+        st.write("Valid leaks (in network):", valid_leaks)
+        st.write("Unmatched nodes:", unmatched)
+    
+        # 6) Build node -> leak value mapping (dict for WNTR)
         node_attr = {n: 0.0 for n in net_nodes}  # default 0
-        for n in leak_nodes_raw:
-            node_attr[n] = 1.0  # mark leak nodes
-        st.write("Sample node_attr items:", list(node_attr.items())[:20])
-])
-
-    
-        # 7) Build node -> leak value mapping (dict for WNTR)
-        node_attr = {n: 0.0 for n in net_nodes}
         for n in valid_leaks:
-            node_attr[n] = 1.0
+            node_attr[n] = 1.0  # mark leak nodes
     
-        # 8) Debugging: check the node_attr dictionary before plotting
         st.write("Total nodes flagged as leak:", sum(v == 1.0 for v in node_attr.values()))
         st.write("Sample node_attr items:", list(node_attr.items())[:20])
     
-        # 9) Plot the network
+        # 7) Plot the network
         fig, ax = plt.subplots(figsize=(10, 7))
         wntr.graphics.plot_network(
             net,
@@ -81,12 +79,13 @@ st.write("Nodes with leak==1:", leak_nodes_raw)
             ax=ax
         )
     
-        # 10) Add legend
+        # 8) Add legend
         handles = [
             mpatches.Patch(color='red', label='Predicted leak'),
             mpatches.Patch(color='lightgray', label='Normal')
         ]
         ax.legend(handles=handles, loc='upper right')
     
-        # 11) Show plot in Streamlit
+        # 9) Show plot in Streamlit
         st.pyplot(fig)
+)
