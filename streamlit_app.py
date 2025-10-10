@@ -36,32 +36,28 @@ if uploaded_file is not None:
     
     # --- NETWORK VISUALIZATION ---
     with st.spinner("Plotting network, please wait..."):
-        # 1) Normalize node strings in your uploaded data
+        # 1) Normalize node strings
         data["node"] = data["node"].astype(str).str.strip()
-    
-        # 2) Aggregate leak predictions per node (collapse duplicates)
+        
+        # 2) Aggregate leak predictions per node (max ensures any leak=1)
         agg_leaks = data.groupby("node", as_index=False)["predicted_leak"].max()
-        st.write("Aggregated leak status per node (one row per node):")
-        st.dataframe(agg_leaks.head(20))
-    
-        # 3) Quick check: counts of how many rows per node (just for debugging)
-        st.write("Counts per node (first 10 rows) -- frequency, NOT leak status:")
-        st.write(data["node"].value_counts().head(10))
-    
-        # 4) Build list of nodes predicted as leaks (one entry per node)
+        
+        # 3) Leak nodes
         leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()
-        st.write("Nodes with leak==1 after aggregation:", leak_nodes_raw)
-    
-        # 5) Normalize network node names
+        
+        # 4) Network node names as strings
         net_nodes = [str(n).strip() for n in net.node_name_list]
-        st.write("Network nodes count:", len(net_nodes))
-        st.write("Example network nodes:", net_nodes[:10])
-    
-        # 6) Find intersection between CSV leak nodes and network nodes
+        
+        # 5) Intersection
         valid_leaks = [n for n in leak_nodes_raw if n in net_nodes]
-        unmatched = [n for n in leak_nodes_raw if n not in net_nodes]
-        st.write("Valid leaks in network:", valid_leaks[:50])
-        st.write("Unmatched nodes (not in network):", unmatched[:50])
+        
+        # 6) Build dictionary: one entry per node, 0/1 values
+        node_attr = {n: 0.0 for n in net_nodes}
+        for n in valid_leaks:
+            node_attr[n] = 1.0
+        
+        st.write("Sample node_attr items:", list(node_attr.items())[:20])
+
     
         # 7) Build node -> leak value mapping (dict for WNTR)
         node_attr = {n: 0.0 for n in net_nodes}
