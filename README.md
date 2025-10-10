@@ -28,7 +28,7 @@ HydraAI is a web application that predicts water leaks before they occur using m
 **Dependencies:**
 - Python libraries: `pandas`, `numpy`, `matplotlib`, `scikit-learn`, `joblib`, `streamlit`, `wntr`
 
-**Python version:** Use Python 3.10+ (check with `python --version`)
+**Python version:** Use Python 3.10 or newer
 
 **Installation:**
 ```bash
@@ -43,7 +43,7 @@ pip install -r requirements.txt
 
 HydraAI uses synthetic features based on the Net3 water network model. Raw training data is not included for privacy and simplicity, but the app uses these features to make predictions.
 
-Features used in rtaining which are the columns of hte features.csv file are"
+Features used in training which are the columns of hte features.csv file are"
 - node: Node identifier
 - rolling_mean: Mean pressure over past 4 hours
 - rolling_std: Standard deviation of pressure over past 4 hours
@@ -55,7 +55,11 @@ Features used in rtaining which are the columns of hte features.csv file are"
 - pipe_diameter_max: Maximum diameter of connected pipes
 - pipe_avg_age: Average age of connected pipes
 
-Rolling statistics summarize recent history to capture temporal patterns. Static features describe network topology and pipe characteristics. Only node-level leak predictions are performed currently.
+The raw CSV containing all simulated netwrok data is not included here for simplicity. However, a features.csv file is proviided to test the app and explore the fucnitonality without access to the full dataset.
+
+Rolling statistics such as rolling_mean and rolling_std summarize the recent history of node pressures to capture short-term trends and temporal patterns. These are critical for the model to detect potential anomalies that could indicate future leaks. Static features, like node elevation, degree, and pipe characteristics, describe the network’s topology and infrastructure.
+
+Currently, the app performs node-level leak predictions only, not pipe-level predictions, due to the complexity of pipe naming in the Net3 network model.
 
 
 ---
@@ -64,7 +68,7 @@ Rolling statistics summarize recent history to capture temporal patterns. Static
 
 Model Used: Random Forest Classifier (sklearn)
 
-Random forest is an ensemble of decision trees that vote on the predicted outcome.
+Random forest is an ensemble of decision trees that vote on the predicted outcome. It was used in this project becasue it is robust to noisy data, handles non-linear relationships well and is easy to interpret.
 
 Hyperparameters:
 
@@ -111,10 +115,12 @@ Streamlit app
 ## Results/Evaluation
 
 Below are the model performance metrics from training:
-- Precision:
-- Recall:
-- F1-score:
-- ROC-AOC:
+- Training Accuracy: 0.8724
+- Testing Accuracy: 0.8736 
+- Precision: 0.1920
+- Recall: 0.9558
+- F1-score: 0.3198
+- ROC-AUC: 0.9418
 
 
 Feature importances indicate which factors most influence leak predictions.
@@ -122,6 +128,8 @@ Feature importances indicate which factors most influence leak predictions.
 Streamlit app outputs allow exploration of predicted leaks and their locations by producing an image of the network with the leaks flagged in red.
 
 ![Network Visualization](PicOfNetwork.png)
+
+This gives a clear view of which nodes are likely to leak. And this allows managers at water facilities to quickly assess risk areas.
 
 
 ---
