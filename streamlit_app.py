@@ -25,6 +25,8 @@ if uploaded_file is not None:
 
     
     # --- MAKE PREDICTIONS ---
+    # Load trained Random Forest model
+    rf_model = joblib.load("rf_model.pkl")  # replace with your actual model file
     y_proba = rf_model.predict_proba(X_new)[:, 1]
     THRESHOLD = 0.5
     y_pred = (y_proba >= THRESHOLD).astype(int)
