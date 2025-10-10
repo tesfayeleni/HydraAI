@@ -117,11 +117,12 @@ Below are the model performance metrics from training:
 - ROC-AOC:
 
 
-
-
 Feature importances indicate which factors most influence leak predictions.
 
 Streamlit app outputs allow exploration of predicted leaks and their locations by producing an image of the network with the leaks flagged in red.
+
+![Network Visualization](PicOfNetwork.png)
+
 
 ---
 
