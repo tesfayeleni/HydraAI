@@ -41,22 +41,22 @@ if uploaded_file is not None:
         
         # 2) Aggregate leak predictions per node (max ensures any leak=1)
         agg_leaks = data.groupby("node", as_index=False)["predicted_leak"].max()
+        st.write("Aggregated leak status per node:")
+        st.dataframe(agg_leaks.head(20))
+
         
         # 3) Leak nodes
-        leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()
+        leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()        
+st.write("Nodes with leak==1:", leak_nodes_raw)
+
         
         # 4) Network node names as strings
-        net_nodes = [str(n).strip() for n in net.node_name_list]
-        
-        # 5) Intersection
-        valid_leaks = [n for n in leak_nodes_raw if n in net_nodes]
-        
-        # 6) Build dictionary: one entry per node, 0/1 values
-        node_attr = {n: 0.0 for n in net_nodes}
-        for n in valid_leaks:
-            node_attr[n] = 1.0
-        
+      net_nodes = [str(n).strip() for n in net.node_name_list]  # ensure strings
+        node_attr = {n: 0.0 for n in net_nodes}  # default 0
+        for n in leak_nodes_raw:
+            node_attr[n] = 1.0  # mark leak nodes
         st.write("Sample node_attr items:", list(node_attr.items())[:20])
+])
 
     
         # 7) Build node -> leak value mapping (dict for WNTR)
