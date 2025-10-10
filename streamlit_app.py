@@ -11,66 +11,67 @@ import wntr    # for network visualization
 # --- LOAD NETWORK WITH CACHING ---
 @st.cache_resource
 def load_network(path):
+    # Load the water network model once and cache it for efficiency
     return wntr.network.WaterNetworkModel(path)
 
-net = load_network("Net3.inp")  # load once and cache
+net = load_network("Net3.inp")  # load network file
 
 # --- LOAD DATA ---
 uploaded_file = st.file_uploader("Upload latest sensor/network data", type=["csv"])
 if uploaded_file is not None:
     data = pd.read_csv(uploaded_file)
-    # X_new = data.drop(columns=["node", "time"], errors='ignore').values  # remove non-feature columns
-
+    # Convert uploaded data to a NumPy array for model input
     X_new = data.values  
 
-    
     # --- MAKE PREDICTIONS ---
     # Load trained Random Forest model
-    rf_model = joblib.load("rf_model.pkl")  # replace with your actual model file
-    y_proba = rf_model.predict_proba(X_new)[:, 1]
+    rf_model = joblib.load("rf_model.pkl")  # trained RF model file
+    y_proba = rf_model.predict_proba(X_new)[:, 1]  # probability of leak
     THRESHOLD = 0.5
-    y_pred = (y_proba >= THRESHOLD).astype(int)
+    y_pred = (y_proba >= THRESHOLD).astype(int)  # apply threshold to get binary prediction
 
     # --- DISPLAY PREDICTIONS ---
     st.write("Predicted leaks (1 = leak):")
     data["predicted_leak"] = y_pred
-    st.dataframe(data)
-    
+    st.dataframe(data)  # show predictions with original data
+
     # --- NETWORK VISUALIZATION ---
     with st.spinner("Plotting network, please wait..."):
-        # 1) Normalize node strings
+        # 1) Normalize node strings to ensure consistent matching
         data["node"] = data["node"].astype(str).str.strip()
         
-        # 2) Aggregate leak predictions per node (max ensures any leak=1)
+        # 2) Aggregate leak predictions per node
+        # max ensures that if any row indicates a leak, the node is flagged
         agg_leaks = data.groupby("node", as_index=False)["predicted_leak"].max()
         st.write("Aggregated leak status per node:")
         st.dataframe(agg_leaks)
     
-        # 3) Leak nodes
+        # 3) Identify nodes predicted as leaks
         leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()
-        # st.write("Nodes with leak==1:", leak_nodes_raw)
     
-        # 4) Network node names as strings
-        net_nodes = [str(n).strip() for n in net.node_name_list]  # ensure strings
+        # 4) Ensure network node names are strings for matching
+        net_nodes = [str(n).strip() for n in net.node_name_list]
     
-        # 5) Intersection: valid leaks
+        # 5) Filter valid leaks that exist in the network
         valid_leaks = [n for n in leak_nodes_raw if n in net_nodes]
         unmatched = [n for n in leak_nodes_raw if n not in net_nodes]
         st.write("Valid leaks:", valid_leaks)
-        st.write('HERE, THE LOGIC FOR HAVING THE BIGGEST CAUSE FOR EACH LEAK TO BE FLAGGED, AS WELL AS THE NLP SUGGESTION FOR EACH CAN BE DEVELOPED!!!')
-        # st.write("Unmatched nodes:", unmatched)
+        
+        # TODO: In future iterations, implement logic to identify the primary cause for each leak
+        # TODO: Implement automated NLP suggestions for each flagged node
     
-        # 6) Build node -> leak value mapping (dict for WNTR)
-        node_attr = {n: 0.0 for n in net_nodes}  # default 0
+        # 6) Build node -> leak value mapping for WNTR visualization
+        node_attr = {n: 0.0 for n in net_nodes}  # default all nodes to 0
         for n in valid_leaks:
             node_attr[n] = 1.0  # mark leak nodes
     
         st.write("Total nodes flagged as leak:", sum(v == 1.0 for v in node_attr.values()))
-        # st.write("Sample node_attr items:", list(node_attr.items())[:20])
+        # Optional: sample of node_attr for debugging
+        # print("Sample node_attr items:", list(node_attr.items())[:20])
 
-        st.write('ALSO NOTE, THE MAP IS AN IMAGE RIGHT NOW, NOT AN INTERACTIBLE ONE')
+        # NOTE: Current network visualization is static (non-interactive)
     
-        # 7) Plot the network
+        # 7) Plot the network with leak nodes highlighted
         fig, ax = plt.subplots(figsize=(10, 7))
         wntr.graphics.plot_network(
             net,
@@ -82,12 +83,13 @@ if uploaded_file is not None:
             ax=ax
         )
     
-        # 8) Add legend
+        # 8) Add legend for leak vs normal nodes
         handles = [
             mpatches.Patch(color='red', label='Predicted leak'),
             mpatches.Patch(color='lightgray', label='Normal')
         ]
         ax.legend(handles=handles, loc='upper right')
     
-        # 9) Show plot in Streamlit
+        # 9) Show plot in Streamlit app
         st.pyplot(fig)
+)
