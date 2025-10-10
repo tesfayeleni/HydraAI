@@ -77,7 +77,6 @@ if uploaded_file is not None:
             node_cmap=['lightgray', 'red'],  # 0->gray, 1->red
             node_range=[0, 1],
             link_width=1.2,
-            show_plot=False,
             ax=ax
         )
     
