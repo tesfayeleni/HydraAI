@@ -45,7 +45,7 @@ if uploaded_file is not None:
         # 2) Aggregate leak predictions per node (max ensures any leak=1)
         agg_leaks = data.groupby("node", as_index=False)["predicted_leak"].max()
         st.write("Aggregated leak status per node:")
-        st.dataframe(agg_leaks.head(20))
+        st.dataframe(agg_leaks.head(100))
     
         # 3) Leak nodes
         leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()
