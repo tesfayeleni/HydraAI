@@ -91,5 +91,5 @@ if uploaded_file is not None:
         ax.legend(handles=handles, loc='upper right')
     
         # 9) Show plot in Streamlit app
-        st.pyplot(fig)
+        st.pyplot(fig
 )
