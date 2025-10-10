@@ -48,7 +48,7 @@ if uploaded_file is not None:
     
         # 3) Leak nodes
         leak_nodes_raw = agg_leaks.loc[agg_leaks["predicted_leak"] == 1, "node"].tolist()
-        st.write("Nodes with leak==1:", leak_nodes_raw)
+        # st.write("Nodes with leak==1:", leak_nodes_raw)
     
         # 4) Network node names as strings
         net_nodes = [str(n).strip() for n in net.node_name_list]  # ensure strings
@@ -56,7 +56,8 @@ if uploaded_file is not None:
         # 5) Intersection: valid leaks
         valid_leaks = [n for n in leak_nodes_raw if n in net_nodes]
         unmatched = [n for n in leak_nodes_raw if n not in net_nodes]
-        st.write("Valid leaks (in network):", valid_leaks)
+        st.write("Valid leaks:", valid_leaks)
+        st.write('HERE, THE LOGIC FOR HAVING THE BIGGEST CAUSE FOR EACH LEAK TO BE FLAGGED, AS WELL AS THE NLP SUGGESTION FOR EACH CAN BE DEVELOPED!!!')
         # st.write("Unmatched nodes:", unmatched)
     
         # 6) Build node -> leak value mapping (dict for WNTR)
@@ -66,6 +67,8 @@ if uploaded_file is not None:
     
         st.write("Total nodes flagged as leak:", sum(v == 1.0 for v in node_attr.values()))
         # st.write("Sample node_attr items:", list(node_attr.items())[:20])
+
+        st.write('ALSO NOTE, THE MAP IS AN IMAGE RIGHT NOW, NOT AN INTERACTIBLE ONE')
     
         # 7) Plot the network
         fig, ax = plt.subplots(figsize=(10, 7))
