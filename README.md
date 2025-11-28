@@ -43,7 +43,7 @@ pip install -r requirements.txt
 
 HydraAI uses synthetic features based on the Net3 water network model. Raw training data is not included for privacy and simplicity, but the app uses these features to make predictions.
 
-Features used in training which are the columns of hte features.csv file are"
+Features used in training which are the columns of the features.csv file are"
 - node: Node identifier
 - rolling_mean: Mean pressure over past 4 hours
 - rolling_std: Standard deviation of pressure over past 4 hours
