@@ -1,166 +1,302 @@
-# HydraAI: Water Network Leak Prediction using Random Forest
-
-## Project Overview
-
-HydraAI is a web application that predicts water leaks before they occur using machine learning and synthetic data. By analyzing features derived from simulated water network data, the app identifies nodes that are likely to experience leaks, allowing water facility managers to proactively inspect and maintain infrastructure.
-
-**Motivation:** Millions of gallons of water are lost every year due to aging infrastructure and undetected leaks. Traditional leak detection methods identify issues only after they occur. HydraAI introduces predictive leak detection, giving utilities the ability to prevent leaks before they happen. This is particularly important in regions with scarce water resources, such as the UAE, but the methodology can be applied globally.
-
-**Scope / Current Limitations:**
-- The current version predicts leaks at nodes only, not along pipes, due to naming complexity in the Net3 network model used.
-- Synthetic data was used for training as real utility data is not publicly available.
+# 💧 HydraAI — Probabilistic Early Warning System for Water Network Leak Detection
 
 ---
 
-## Table of Contents
-- [Installation](#installation)
-- [Dataset / Features](#dataset--features)
-- [Model Training / Methodology](#model-training--methodology)
-- [How to Run / Demo](#how-to-run--demo)
-- [Results / Evaluation](#results--evaluation)
-- [Notes / Limitations](#notes--limitations)
-- [Credits / References](#credits--references)
+## 🚨 Problem Statement
+
+Water distribution networks are large, complex, and highly sensitive infrastructure systems. Even small leaks can lead to:
+
+- Massive water loss over time  
+- Increased operational and maintenance costs  
+- Reduced system reliability and service quality  
+- Severe impact in water-scarce regions (e.g., Middle East, North Africa)
+
+Traditional monitoring systems are reactive, detecting leaks only after pressure drops become visible or physical damage occurs.
 
 ---
 
-## Installation
+### 🔄 HydraAI reframes this problem as:
 
-**Dependencies:**
-- Python libraries: `pandas`, `numpy`, `matplotlib`, `scikit-learn`, `joblib`, `streamlit`, `wntr`
+> A probabilistic early-warning forecasting problem
 
-**Python version:** Use Python 3.10 or newer
+**“At any time t, what is the probability that a leak will occur within the next 4 hours?”**
 
-**Installation:**
+This enables **preemptive maintenance instead of reactive repair**.
+
+---
+
+## 🧠 HydraAI Solution Overview
+
+HydraAI is a full machine learning pipeline that simulates, labels, learns, and predicts leak risk in water distribution networks using physics-based simulations + temporal ML.
+
+### Core Idea
+
+Instead of detecting leaks after they happen, HydraAI learns:
+
+- Subtle pre-failure pressure dynamics  
+- Temporal degradation signals across nodes  
+- Spatial inconsistencies in hydraulic behavior  
+
+and converts them into a **continuous risk score over time**.
+
+---
+
+## 🏗 System Architecture
+
+### 1. Physics-Based Data Generation (WNTR Simulation)
+
+We use the EPA WNTR simulator to generate synthetic leak scenarios:
+
+- Each scenario = leak at a specific node + leak size  
+- Multiple scenarios created across:
+  - All junction nodes  
+  - Multiple leak severities  
+
+Each simulation produces time-series pressure data.
+
+📌 **Output (`dataset.csv`) contains:**
+
+- time  
+- node  
+- pressure  
+- leak_node  
+- leak_size  
+- scenario_id  
+- leak_start_time  
+
+---
+
+### 2. Probabilistic Labeling (4-hour prediction horizon)
+
+We convert the problem into a sliding window forecasting task:
+
+> Label = 1 if a leak will occur within the next 4 hours at time *t*
+
+This creates:
+
+- `future_leak_4h_horizon ∈ {0, 1}`
+
+Transforms raw simulation data into a predictive maintenance dataset.
+
+---
+
+### 3. Feature Engineering (Temporal + Local Dynamics)
+
+HydraAI uses past-only information to avoid leakage and simulate real-world deployment conditions.
+
+#### Temporal Features
+
+- Rolling mean (pressure trend)  
+- Rolling std (instability)  
+- Rolling min/max (extremes)  
+- lag_1, lag_3 (short-term memory)  
+- diff_1, diff_3 (pressure change velocity)  
+
+#### Key Design Choice (Important)
+
+We removed:
+
+- Global mean pressure  
+- Global z-score features  
+
+to avoid data leakage from full-network knowledge.
+
+Instead, the model learns:
+
+> “How pressure changes locally over time at each node”
+
+---
+
+### 4. Model Training (XGBoost Classifier)
+
+We use XGBoost because:
+
+- Strong performance on tabular + engineered features  
+- Handles non-linear temporal interactions well  
+- Robust to noisy simulation data  
+- Efficient for large-scale datasets  
+
+📌 Output:
+- Probability of leak occurring within next 4 hours
+
+---
+
+### 5. Decision System (Risk Over Time)
+
+Instead of binary classification, HydraAI outputs:
+
+> Continuous leak probability per node over time
+
+Operational logic:
+
+- Sustained risk > threshold (e.g., 0.25)  
+- Ignore single spikes  
+- Trigger early warning alerts  
+
+This aligns with real utility monitoring systems.
+
+---
+
+## 📊 Model Performance
+
+Example evaluation results:
+
+- ROC-AUC: ~0.88–0.89  
+- Recall (leak detection): ~0.78–0.88  
+- Precision: ~0.10–0.12 (expected in early-warning systems)
+
+### Interpretation
+
+This is intentional:
+
+- High recall → catch most potential leaks  
+- Low precision → acceptable false alarms in water-critical regions  
+
+> In water utilities, missing a leak is far worse than a false alarm.
+
+---
+
+## 🧪 Streamlit Application
+
+HydraAI includes a real-time monitoring dashboard:
+
+### Features
+
+- Upload simulation or sensor data  
+- Predict leak probability per node  
+- Generate risk-over-time curves  
+- Visualize water network using WNTR  
+- Highlight high-risk nodes in red  
+
+### Outputs
+
+- Node-level risk heatmap  
+- Temporal risk evolution graph  
+- Network visualization overlay (WNTR graph)  
+
+---
+
+## 🗺 Visualization Layer
+
+Built using:
+
+- `wntr.graphics` (network topology)  
+- Matplotlib overlays  
+- Node-level risk aggregation  
+
+Enables engineers to:
+
+> Visually identify vulnerable zones in the network in real time
+
+---
+
+## ⚙ Tech Stack
+
+- Python (core pipeline)  
+- WNTR (hydraulic simulation)  
+- Pandas / NumPy (feature engineering)  
+- XGBoost (ML model)  
+- Scikit-learn (evaluation)  
+- Streamlit (deployment UI)  
+- Matplotlib (visualization)  
+- Joblib (model persistence)  
+
+---
+
+## ⚙ Installation
+
+### 1. Clone the repository
 ```bash
-# Install dependencies from requirements.txt
+git clone https://github.com/tesfayeleni/HydraAI.git
+cd HydraAI
+```
+
+### 2. Create and activate a virtual environment (recommended)
+
+**Mac/Linux**
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+**Windows**
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+### 3. Install dependencies
+```bash
 pip install -r requirements.txt
 ```
 
-
----
-
-## Features
-
-HydraAI uses synthetic features based on the Net3 water network model. Raw training data is not included for privacy and simplicity, but the app uses these features to make predictions.
-
-Features used in training which are the columns of the features.csv file are"
-- node: Node identifier
-- rolling_mean: Mean pressure over past 4 hours
-- rolling_std: Standard deviation of pressure over past 4 hours
-- elevation: Elevation of node
-- degree: Number of connections to other nodes
-- pipe_length_avg: Average length of connected pipes
-- pipe_length_max: Maximum length of connected pipes
-- pipe_diameter_avg: Average diameter of connected pipes
-- pipe_diameter_max: Maximum diameter of connected pipes
-- pipe_avg_age: Average age of connected pipes
-
-The raw CSV containing all simulated netwrok data is not included here for simplicity. However, a features.csv file is proviided to test the app and explore the fucnitonality without access to the full dataset.
-
-Rolling statistics such as rolling_mean and rolling_std summarize the recent history of node pressures to capture short-term trends and temporal patterns. These are critical for the model to detect potential anomalies that could indicate future leaks. Static features, like node elevation, degree, and pipe characteristics, describe the network’s topology and infrastructure.
-
-Currently, the app performs node-level leak predictions only, not pipe-level predictions, due to the complexity of pipe naming in the Net3 network model.
-
-
----
-
-## Model Training/Methodology
-
-Model Used: Random Forest Classifier (sklearn)
-
-Random forest is an ensemble of decision trees that vote on the predicted outcome. It was used in this project becasue it is robust to noisy data, handles non-linear relationships well and is easy to interpret.
-
-Hyperparameters:
-
+### 4. If you run into dependency issues
 ```bash
-rf_params = {
-    "n_estimators": 200,          # Number of trees in the forest
-    "max_depth": 10,              # Maximum depth of each tree
-    "min_samples_split": 10,      # Minimum samples to split a node
-    "min_samples_leaf": 5,        # Minimum samples at a leaf node
-    "max_features": "sqrt",       # Features considered at each split
-    "class_weight": "balanced",   # Handle class imbalance
-    "random_state": 13,           # Reproducibility
-    "n_jobs": -1                  # Use all CPU cores
-}
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-**Training procedure
-1. First, the dataset was split into training and testing sets (70%/30%)
-2. Features(x) and target(y) were separated
-3. Rows with missing target values dropped
-4. Model trained on training data and evaluated on test set
+### 5. Run the pipeline
 
-**Evaluation metrics used:
-1. Precision, Recall, F1-score, ROC-AUC
-2. Confusion matrix and classification report
-
-The trained model is saved as rf_model.pkl and can be used to predict new input data without retraining.
+```bash
+python generate_dataset.py
+python label_dataset.py
+python feature_engineering.py
+python XGBoost.py
+streamlit run streamlit_app.py
+```
 
 ---
 
-## How to Run/Demo
 
-Streamlit app
-1. Clone the repository
-2. Run the app locally
-3. Upload the CSV file with new node features (features.csv or sample_features.csv)
-4. Outputs produced:
-       Predicted leaks for each node (predicted_leak)
-       Aggregated leak status per node
-       Network visualization with leak nodes highlighted
+## 🧪 Key Design Insight
+
+HydraAI is not a classification problem.
+
+It is:
+
+> A spatiotemporal survival forecasting system over hydraulic networks
 
 ---
 
-## Results/Evaluation
+## 📉 Limitations
 
-Below are the model performance metrics from training:
-- Training Accuracy: 0.8724
-- Testing Accuracy: 0.8736 
-- Precision: 0.1920
-- Recall: 0.9558
-- F1-score: 0.3198
-- ROC-AUC: 0.9418
-
-
-Feature importances indicate which factors most influence leak predictions.
-
-Streamlit app outputs allow exploration of predicted leaks and their locations by producing an image of the network with the leaks flagged in red.
-
-![Network Visualization](PicOfNetwork.png)
-
-This gives a clear view of which nodes are likely to leak. And this allows managers at water facilities to quickly assess risk areas.
-
+- Synthetic data (WNTR simulation, not real utility data)  
+- Node-level modeling only (pipe-level extension future work)  
+- Assumes known leak start distributions during training  
+- Feature sensitivity depends on simulation realism  
 
 ---
 
-## Limitations
+## 🚀 Future Work (Research Direction)
 
-- Original training data is not included for privacy.
-- Current predictions are node-level only, not pipe-level.
-- Assumptions:
-    - Prediction threshold = 0.5
-    - Class imbalance handled via balanced weighting in Random Forest
-- Future improvements:
-    - Extend predictions to pipes
-    - Integrate real utility data
-    - Include more advanced visualization
-    - NLP suggestions for leak causes
- 
+HydraAI is designed to evolve into a publishable system:
+
+### 1. Survival Analysis Extension
+Model time-to-leak probability distributions instead of binary labels
+
+### 2. Graph Neural Networks (GNNs)
+Capture:
+- Full network dependencies  
+- Pressure propagation dynamics  
+
+### 3. Real Utility Integration
+Train on:
+- SCADA sensor data  
+- Real municipal pipelines  
+
+### 4. Uncertainty Quantification
+- Bayesian XGBoost or ensembles  
+- Confidence intervals for predictions  
+
+### 5. Edge Deployment
+- Real-time monitoring system for utilities  
+- Field engineer alerting system  
+
 ---
 
-## References
+## 📚 References
 
-Libraries used:
-
-- pandas, numpy, matplotlib, scikit-learn, joblib, streamlit, wntr
-
-Data / Network:
-
-- Net3 sample water network from WNTR library, modified for synthetic leak simulations
-
-References:
-
-- WNTR Python library: https://github.com/USEPA/WNTR
-- Scikit-learn Random Forest documentation
-
+- WNTR Python Library  
+- Scikit-learn Documentation  
+- XGBoost Documentation  
