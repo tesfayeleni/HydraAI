@@ -255,15 +255,19 @@ hr {
 
 UPLOAD_DIR = "/mnt/user-data/uploads"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else "."
+PARENT_DIR = os.path.dirname(SCRIPT_DIR)  # app/ -> HydraAI/
 
 def find_file(filename):
-    """Search common locations for a file."""
+    """Search common locations for a file, walking up to project root."""
     candidates = [
-        os.path.join(UPLOAD_DIR, filename),
         os.path.join(SCRIPT_DIR, filename),
+        os.path.join(PARENT_DIR, filename),
+        os.path.join(PARENT_DIR, "data", filename),
+        os.path.join(PARENT_DIR, "models", filename),
+        os.path.join(PARENT_DIR, "networks", filename),
         os.path.join(SCRIPT_DIR, "data", filename),
         os.path.join(SCRIPT_DIR, "models", filename),
-        os.path.join(SCRIPT_DIR, "networks", filename),
+        os.path.join(UPLOAD_DIR, filename),
         filename,
     ]
     for path in candidates:
