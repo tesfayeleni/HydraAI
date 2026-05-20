@@ -796,7 +796,23 @@ def plot_network_fallback(alert_panel_df, threshold, selected_node=None):
 
 
 # ─────────────────────────────────────────────
-# SIDEBAR
+# SESSION STATE — navigation
+# ─────────────────────────────────────────────
+
+if "view" not in st.session_state:
+    st.session_state.view = "map"          # "map" | "node"
+if "drill_node" not in st.session_state:
+    st.session_state.drill_node = None
+
+def go_to_node(node_name):
+    st.session_state.drill_node = node_name
+    st.session_state.view = "node"
+
+def go_to_map():
+    st.session_state.view = "map"
+
+# ─────────────────────────────────────────────
+# SIDEBAR  (always visible)
 # ─────────────────────────────────────────────
 
 with st.sidebar:
@@ -807,7 +823,7 @@ with st.sidebar:
     st.markdown("---")
 
     df_all = load_dataset()
-    model = load_model()
+    model  = load_model()
     feature_list = load_feature_list()
 
     if df_all is None or model is None or feature_list is None:
@@ -816,26 +832,36 @@ with st.sidebar:
 
     st.markdown("### 📡 Scenario")
     scenarios = sorted(df_all["scenario_id"].unique())
-    selected_scenario = st.selectbox("Scenario ID", scenarios, index=0, label_visibility="collapsed")
+    selected_scenario = st.selectbox(
+        "Scenario ID", scenarios, index=0, label_visibility="collapsed"
+    )
 
     st.markdown("---")
     st.markdown("### ⚙️ Risk Engine")
-
     threshold = st.slider(
-        "Alert Threshold",
-        min_value=0.10, max_value=0.60, value=0.25, step=0.01,
-        help="Smoothed probability threshold for triggering alerts"
+        "Alert Threshold", min_value=0.10, max_value=0.60,
+        value=0.25, step=0.01,
+        help="Probability above which a node is flagged. Does not affect model predictions."
     )
     smoothing_window = st.slider(
-        "Smoothing Window (timesteps)",
-        min_value=3, max_value=10, value=6, step=1,
-        help="Rolling mean window for temporal smoothing"
+        "Smoothing Window (timesteps)", min_value=3, max_value=10,
+        value=6, step=1,
+        help="Rolling mean window — wider = fewer false alarms, slower response."
+    )
+    st.markdown(
+        "<div style='font-family:Space Mono;font-size:0.6rem;color:#4a6278;line-height:1.7'>"
+        "These controls adjust <b style='color:#7a9bb5'>alert flagging only</b>.<br>"
+        "The XGBoost model is not retrained.<br><br>"
+        "P(leak) = probability of leak<br>within next 4 hours.<br><br>"
+        "Alerts trigger after ≥3<br>consecutive steps above threshold."
+        "</div>",
+        unsafe_allow_html=True
     )
 
     st.markdown("---")
-    st.markdown("### 🔵 Node Drill-Down")
-    # Process scenario first so we can show risk-sorted nodes
-    with st.spinner("Computing risk…"):
+
+    # Process scenario
+    with st.spinner("Running inference…"):
         df_processed = process_scenario(
             model, feature_list,
             selected_scenario, smoothing_window, threshold,
@@ -843,63 +869,60 @@ with st.sidebar:
         )
     alert_panel_df = build_alert_panel(df_processed, threshold)
 
-    # Show nodes sorted by risk (highest first)
+    # Node jump list — sorted by risk
+    st.markdown("### 🔵 Jump to Node")
     sorted_nodes = alert_panel_df["node"].tolist()
-    selected_node = st.selectbox(
-        "Select Node",
-        sorted_nodes,
-        index=0,
-        format_func=lambda n: f"{n}  [{alert_panel_df.loc[alert_panel_df['node']==n, 'alert_state'].values[0]}]",
+
+    def node_label(n):
+        row = alert_panel_df.loc[alert_panel_df["node"] == n].iloc[0]
+        icon = "🔴" if row["alert_state"] == "ACTIVE" else "🟡" if row["alert_state"] == "WARNING" else "🟢"
+        return f"{icon} {n}  ({row['current_smoothed']:.3f})"
+
+    jump_node = st.selectbox(
+        "Select node", sorted_nodes,
+        format_func=node_label,
         label_visibility="collapsed",
-        help="Nodes sorted by current risk level"
+        key="sidebar_node_select"
     )
+    if st.button("🔍 Inspect Node", use_container_width=True):
+        go_to_node(jump_node)
+        st.rerun()
 
-    st.markdown("---")
-
-    # Mini node stats in sidebar
-    node_row = alert_panel_df[alert_panel_df["node"] == selected_node].iloc[0]
-    state = node_row["alert_state"]
-    state_color = "#ff3b3b" if state == "ACTIVE" else "#ffd700" if state == "WARNING" else "#00e676"
-    badge_cls = "badge-active" if state == "ACTIVE" else "badge-warning" if state == "WARNING" else "badge-standby"
-
-    st.markdown(f"""
-    <div style='background:#141c26;border:1px solid #1e2d3d;border-left:3px solid {state_color};
-    border-radius:6px;padding:0.9rem 1rem;font-family:Space Mono;'>
-      <div style='font-size:0.65rem;color:#7a9bb5;letter-spacing:0.1em;text-transform:uppercase'>
-        Selected Node
-      </div>
-      <div style='font-size:1rem;color:#e8f4f8;font-weight:700;margin:0.3rem 0'>{selected_node}</div>
-      <span class='{badge_cls}'>{state}</span>
-      <div style='margin-top:0.6rem;font-size:0.7rem;color:#7a9bb5;line-height:1.8'>
-        Current Risk &nbsp;<span style='color:#00d4ff'>{node_row["current_smoothed"]:.4f}</span><br>
-        Peak Prob &nbsp;&nbsp;&nbsp;<span style='color:#00ffcc'>{node_row["max_probability"]:.4f}</span><br>
-        Duration &nbsp;&nbsp;&nbsp;&nbsp;<span style='color:#ffd700'>{node_row["duration_above_threshold"]} steps</span>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style='font-family:Space Mono;font-size:0.6rem;color:#4a6278;
-    line-height:1.6em;margin-top:1.2rem'>
-    P(leak) = probability of<br>leak within next 4 hours<br><br>
-    Alerts: ≥3 consecutive<br>steps above threshold.
-    </div>
-    """, unsafe_allow_html=True)
+    if st.session_state.view == "node":
+        if st.button("← Back to Network Map", use_container_width=True):
+            go_to_map()
+            st.rerun()
 
 
 # ─────────────────────────────────────────────
-# MAIN CONTENT
+# SHARED — load network + compute globals
 # ─────────────────────────────────────────────
 
 wn = load_network()
 
-# ── Header bar ──
-active_nodes = int((alert_panel_df["alert_state"] == "ACTIVE").sum())
-warn_nodes   = int((alert_panel_df["alert_state"] == "WARNING").sum())
-total_nodes  = len(alert_panel_df)
-mean_risk    = alert_panel_df["current_smoothed"].mean()
-pct_above    = 100 * (alert_panel_df["current_smoothed"] > threshold).mean()
+active_nodes  = int((alert_panel_df["alert_state"] == "ACTIVE").sum())
+warn_nodes    = int((alert_panel_df["alert_state"] == "WARNING").sum())
+total_nodes   = len(alert_panel_df)
+standby_nodes = total_nodes - active_nodes - warn_nodes
+mean_risk     = alert_panel_df["current_smoothed"].mean()
+pct_above     = 100 * (alert_panel_df["current_smoothed"] > threshold).mean()
+peak_node     = alert_panel_df.iloc[0]["node"] if not alert_panel_df.empty else "—"
+peak_val      = alert_panel_df.iloc[0]["current_smoothed"] if not alert_panel_df.empty else 0.0
 
+def kpi(label, value, color, sub=""):
+    return (
+        f"<div class='metric-card' style='padding:0.8rem 1rem;'>"
+        f"<div class='metric-label' style='font-size:0.6rem'>{label}</div>"
+        f"<div class='metric-value' style='font-size:1.3rem;color:{color}'>{value}</div>"
+        + (f"<div class='metric-sub'>{sub}</div>" if sub else "")
+        + "</div>"
+    )
+
+# ─────────────────────────────────────────────
+# HEADER BAR (always shown)
+# ─────────────────────────────────────────────
+
+view_label = "NETWORK MAP" if st.session_state.view == "map" else f"NODE DRILL-DOWN · {st.session_state.drill_node}"
 st.markdown(f"""
 <div style='display:flex;align-items:center;justify-content:space-between;
 margin-bottom:1rem;padding-bottom:0.8rem;border-bottom:1px solid #1e2d3d;'>
@@ -907,7 +930,7 @@ margin-bottom:1rem;padding-bottom:0.8rem;border-bottom:1px solid #1e2d3d;'>
     <span style='font-family:Space Mono;font-size:1.4rem;font-weight:700;
     color:#00d4ff;letter-spacing:0.04em'>HydraAI</span>
     <span style='font-family:Space Mono;font-size:0.7rem;color:#4a6278;
-    letter-spacing:0.1em;margin-left:0.8rem'>HYDRAULIC RISK MONITORING SYSTEM</span>
+    letter-spacing:0.1em;margin-left:0.8rem'>{view_label}</span>
   </div>
   <div style='display:flex;gap:1.5rem;font-family:Space Mono;font-size:0.7rem;'>
     <span style='color:#4a6278'>SCENARIO <span style='color:#e8f4f8'>{selected_scenario}</span></span>
@@ -918,170 +941,276 @@ margin-bottom:1rem;padding-bottom:0.8rem;border-bottom:1px solid #1e2d3d;'>
 </div>
 """, unsafe_allow_html=True)
 
-# ── System-wide KPI strip ──
+# ── KPI strip (always shown) ──
 k1, k2, k3, k4, k5, k6 = st.columns(6)
-
-def kpi(label, value, color, sub=""):
-    return f"""<div class='metric-card' style='padding:0.8rem 1rem;'>
-      <div class='metric-label' style='font-size:0.6rem'>{label}</div>
-      <div class='metric-value' style='font-size:1.3rem;color:{color}'>{value}</div>
-      {"<div class='metric-sub'>"+sub+"</div>" if sub else ""}
-    </div>"""
-
-with k1:
-    st.markdown(kpi("Active Alerts", active_nodes, "#ff3b3b", "sustained risk"), unsafe_allow_html=True)
-with k2:
-    st.markdown(kpi("Warnings", warn_nodes, "#ffd700", "above threshold"), unsafe_allow_html=True)
-with k3:
-    standby_nodes = total_nodes - active_nodes - warn_nodes
-    st.markdown(kpi("Standby", standby_nodes, "#00e676", "low risk"), unsafe_allow_html=True)
-with k4:
-    st.markdown(kpi("Network Mean Risk", f"{mean_risk:.3f}", "#00d4ff", "smoothed avg"), unsafe_allow_html=True)
-with k5:
-    st.markdown(kpi("Nodes Above Thr.", f"{pct_above:.1f}%", "#ffd700", f"thr={threshold}"), unsafe_allow_html=True)
-with k6:
-    peak_node = alert_panel_df.iloc[0]["node"] if not alert_panel_df.empty else "—"
-    peak_val  = alert_panel_df.iloc[0]["current_smoothed"] if not alert_panel_df.empty else 0
-    st.markdown(kpi("Highest Risk Node", peak_node, "#ff3b3b", f"{peak_val:.3f}"), unsafe_allow_html=True)
+with k1: st.markdown(kpi("Active Alerts",    active_nodes,        "#ff3b3b", "sustained risk"),   unsafe_allow_html=True)
+with k2: st.markdown(kpi("Warnings",         warn_nodes,          "#ffd700", "above threshold"),  unsafe_allow_html=True)
+with k3: st.markdown(kpi("Standby",          standby_nodes,       "#00e676", "low risk"),         unsafe_allow_html=True)
+with k4: st.markdown(kpi("Mean Risk",        f"{mean_risk:.3f}",  "#00d4ff", "smoothed avg"),     unsafe_allow_html=True)
+with k5: st.markdown(kpi("Above Threshold",  f"{pct_above:.1f}%", "#ffd700", f"thr={threshold}"), unsafe_allow_html=True)
+with k6: st.markdown(kpi("Highest Risk",     peak_node,           "#ff3b3b", f"{peak_val:.3f}"),  unsafe_allow_html=True)
 
 st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
-# ════════════════════════════════════════════════════
-# SECTION 1 — FULL NETWORK OVERVIEW (primary view)
-# ════════════════════════════════════════════════════
 
-st.markdown("<div class='section-header'>🗺️ Network Overview — All Nodes · Spatial Risk Map</div>",
-            unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════
+# VIEW A — NETWORK MAP (default landing page)
+# ══════════════════════════════════════════════════════
 
-net_col_main, alert_sidebar_col = st.columns([3, 1], gap="medium")
+if st.session_state.view == "map":
 
-with net_col_main:
-    if wn is not None:
-        net_fig = plot_network_overview(wn, alert_panel_df, threshold, selected_node)
-        st.plotly_chart(net_fig, use_container_width=True, config={"displayModeBar": False})
-    else:
+    st.markdown(
+        "<div class='section-header'>🗺️ Network Overview — All Nodes · Spatial Risk Map"
+        " &nbsp;<span style='font-size:0.6rem;color:#4a6278'>"
+        "hover a node for details · use sidebar to inspect</span></div>",
+        unsafe_allow_html=True
+    )
+
+    net_col_main, alert_sidebar_col = st.columns([3, 1], gap="medium")
+
+    with net_col_main:
+        if wn is not None:
+            net_fig = plot_network_overview(wn, alert_panel_df, threshold,
+                                            st.session_state.drill_node)
+            st.plotly_chart(net_fig, use_container_width=True,
+                            config={"displayModeBar": False})
+        else:
+            st.markdown(
+                "<div style='font-family:Space Mono;font-size:0.65rem;color:#4a6278;"
+                "padding:0.3rem 0 0.6rem'>Net3.inp not found — showing risk bar chart</div>",
+                unsafe_allow_html=True
+            )
+            st.plotly_chart(
+                plot_network_fallback(alert_panel_df, threshold, st.session_state.drill_node),
+                use_container_width=True, config={"displayModeBar": False}
+            )
+
+    with alert_sidebar_col:
         st.markdown(
-            "<div style='font-family:Space Mono;font-size:0.65rem;color:#4a6278;"
-            "padding:0.3rem 0 0.6rem'>Net3.inp not found — showing risk bar chart</div>",
+            "<div class='section-header' style='margin-top:0'>🚨 Alert Queue</div>",
+            unsafe_allow_html=True
+        )
+        display_panel = alert_panel_df[
+            alert_panel_df["alert_state"].isin(["ACTIVE", "WARNING"])
+        ].head(10)
+        if display_panel.empty:
+            display_panel = alert_panel_df.head(8)
+
+        for _, row in display_panel.iterrows():
+            s = row["alert_state"]
+            bc  = "#ff3b3b" if s == "ACTIVE" else "#ffd700" if s == "WARNING" else "#00e676"
+            bdg = "badge-active" if s == "ACTIVE" else "badge-warning" if s == "WARNING" else "badge-standby"
+            st.markdown(f"""
+            <div style='border-left:3px solid {bc};background:#141c26;
+            border-radius:0 5px 5px 0;padding:0.55rem 0.8rem;margin-bottom:0.4rem;
+            font-family:Space Mono;border-top:1px solid #1e2d3d;
+            border-right:1px solid #1e2d3d;border-bottom:1px solid #1e2d3d;'>
+              <div style='display:flex;justify-content:space-between;align-items:center'>
+                <span style='font-size:0.75rem;color:#e8f4f8;font-weight:700'>{row["node"]}</span>
+                <span class='{bdg}'>{s}</span>
+              </div>
+              <div style='font-size:0.65rem;color:#7a9bb5;margin-top:0.3rem'>
+                Risk <span style='color:#00d4ff'>{row["current_smoothed"]:.3f}</span>
+                &nbsp;·&nbsp; {row["duration_above_threshold"]}×
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+            # Inspect button per alert row
+            if st.button(f"Inspect {row['node']}", key=f"btn_{row['node']}",
+                         use_container_width=True):
+                go_to_node(row["node"])
+                st.rerun()
+
+        st.markdown(
+            "<div class='section-header' style='margin-top:1rem'>📊 Risk Distribution</div>",
             unsafe_allow_html=True
         )
         st.plotly_chart(
-            plot_network_fallback(alert_panel_df, threshold, selected_node),
+            plot_risk_histogram(alert_panel_df, threshold),
             use_container_width=True, config={"displayModeBar": False}
         )
 
-with alert_sidebar_col:
-    st.markdown("<div class='section-header' style='margin-top:0'>🚨 Alert Queue</div>",
-                unsafe_allow_html=True)
-    display_panel = alert_panel_df[alert_panel_df["alert_state"].isin(["ACTIVE", "WARNING"])].head(12)
-    if display_panel.empty:
-        display_panel = alert_panel_df.head(8)
 
-    for _, row in display_panel.iterrows():
-        state = row["alert_state"]
-        border_color = "#ff3b3b" if state == "ACTIVE" else "#ffd700" if state == "WARNING" else "#00e676"
-        badge_cls = "badge-active" if state == "ACTIVE" else "badge-warning" if state == "WARNING" else "badge-standby"
-        highlight_bg = "background:#1a2030;" if row["node"] == selected_node else ""
-        st.markdown(f"""
-        <div style='border-left:3px solid {border_color};background:#141c26;{highlight_bg}
-        border-radius:0 5px 5px 0;padding:0.55rem 0.8rem;margin-bottom:0.4rem;
-        font-family:Space Mono;border-top:1px solid #1e2d3d;border-right:1px solid #1e2d3d;
-        border-bottom:1px solid #1e2d3d;'>
-          <div style='display:flex;justify-content:space-between;align-items:center'>
-            <span style='font-size:0.75rem;color:#e8f4f8;font-weight:700'>{row["node"]}</span>
-            <span class='{badge_cls}'>{state}</span>
-          </div>
-          <div style='font-size:0.65rem;color:#7a9bb5;margin-top:0.3rem'>
-            Risk <span style='color:#00d4ff'>{row["current_smoothed"]:.3f}</span>
-            &nbsp;·&nbsp; {row["duration_above_threshold"]}×
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+# ══════════════════════════════════════════════════════
+# VIEW B — NODE DRILL-DOWN
+# ══════════════════════════════════════════════════════
 
-    # Risk distribution mini-chart
-    st.markdown("<div class='section-header' style='margin-top:1rem'>📊 Risk Distribution</div>",
-                unsafe_allow_html=True)
-    fig_hist = plot_risk_histogram(alert_panel_df, threshold)
-    st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
+else:
+    drill_node = st.session_state.drill_node
 
-st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+    # ── Back button at top ──
+    if st.button("← Back to Network Map", key="back_top"):
+        go_to_map()
+        st.rerun()
 
-# ════════════════════════════════════════════════════
-# SECTION 2 — NODE DRILL-DOWN (secondary / on demand)
-# ════════════════════════════════════════════════════
+    # ── Get node data — FIX: filter from df_processed which has smoothed cols ──
+    node_df = (
+        df_processed[df_processed["node"] == drill_node]
+        .sort_values("time")
+        .reset_index(drop=True)
+    )
 
-node_df = df_processed[df_processed["node"] == selected_node].copy().reset_index(drop=True)
+    node_row = alert_panel_df[alert_panel_df["node"] == drill_node]
+    if node_row.empty:
+        st.warning(f"No data found for node {drill_node}.")
+        st.stop()
+    node_row = node_row.iloc[0]
 
-state_color = "#ff3b3b" if node_row["alert_state"] == "ACTIVE" else "#ffd700" if node_row["alert_state"] == "WARNING" else "#00e676"
+    s_color = "#ff3b3b" if node_row["alert_state"] == "ACTIVE" else "#ffd700" if node_row["alert_state"] == "WARNING" else "#00e676"
+    bdg_cls = "badge-active" if node_row["alert_state"] == "ACTIVE" else "badge-warning" if node_row["alert_state"] == "WARNING" else "badge-standby"
 
-st.markdown(f"""
-<div style='border-top:2px solid {state_color};border-radius:4px 4px 0 0;
-background:#141c26;padding:0.7rem 1.2rem;margin-bottom:0;
-display:flex;align-items:center;gap:1rem;'>
-  <span style='font-family:Space Mono;font-size:0.65rem;letter-spacing:0.15em;
-  text-transform:uppercase;color:#7a9bb5'>Node Drill-Down</span>
-  <span style='font-family:Space Mono;font-size:0.9rem;font-weight:700;color:#e8f4f8'>{selected_node}</span>
-  <span class='{"badge-active" if node_row["alert_state"] == "ACTIVE" else "badge-warning" if node_row["alert_state"] == "WARNING" else "badge-standby"}'>{node_row["alert_state"]}</span>
-  <span style='font-family:Space Mono;font-size:0.65rem;color:#4a6278;margin-left:auto'>
-    ← select a different node in the sidebar
-  </span>
-</div>
-""", unsafe_allow_html=True)
+    # ── Node title bar ──
+    st.markdown(f"""
+    <div style='border-top:2px solid {s_color};border-radius:4px 4px 0 0;
+    background:#141c26;padding:0.8rem 1.2rem;margin-bottom:1rem;
+    display:flex;align-items:center;gap:1rem;'>
+      <span style='font-family:Space Mono;font-size:0.65rem;letter-spacing:0.15em;
+      text-transform:uppercase;color:#7a9bb5'>Node Drill-Down</span>
+      <span style='font-family:Space Mono;font-size:1rem;font-weight:700;color:#e8f4f8'>{drill_node}</span>
+      <span class='{bdg_cls}'>{node_row["alert_state"]}</span>
+      <span style='font-family:Space Mono;font-size:0.65rem;color:#4a6278;margin-left:auto'>
+        Scenario {selected_scenario} · {len(node_df)} timesteps · {node_df["time"].max()/3600:.1f}h window
+      </span>
+    </div>
+    """, unsafe_allow_html=True)
 
-drill_chart_col, drill_stats_col = st.columns([3, 1], gap="medium")
+    # ── 4-KPI row for this node ──
+    nk1, nk2, nk3, nk4 = st.columns(4)
+    with nk1: st.markdown(kpi("Alert State",     node_row["alert_state"],                            s_color,    "current"),           unsafe_allow_html=True)
+    with nk2: st.markdown(kpi("Current Risk",    f"{node_row['current_smoothed']:.4f}",            "#00d4ff",  "smoothed prob"),      unsafe_allow_html=True)
+    with nk3: st.markdown(kpi("Peak Probability",f"{node_row['max_probability']:.4f}",             "#00ffcc",  "max observed"),       unsafe_allow_html=True)
+    with nk4: st.markdown(kpi("Duration Above",  f"{node_row['duration_above_threshold']} steps",  "#ffd700",  f"thr={threshold}"),   unsafe_allow_html=True)
 
-with drill_chart_col:
-    if not node_df.empty:
-        fig_risk = plot_risk_over_time(node_df, selected_node, threshold)
-        st.plotly_chart(fig_risk, use_container_width=True, config={"displayModeBar": False})
-    else:
-        st.info("No data available for this node/scenario combination.")
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
 
-with drill_stats_col:
-    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+    # ── Main drill-down layout ──
+    chart_col, stats_col = st.columns([3, 1], gap="medium")
 
-    # Alert history timeline
-    if not node_df.empty:
-        alert_events = node_df[node_df["alert_active"]]["time"].values / 3600
-        sustained_count = int(node_df["alert_active"].sum())
-        first_alert = f"{alert_events[0]:.1f}h" if len(alert_events) > 0 else "None"
-        last_alert  = f"{alert_events[-1]:.1f}h" if len(alert_events) > 0 else "None"
-        time_span   = node_df["time"].max() / 3600
+    with chart_col:
+        st.markdown(
+            "<div class='section-header'>📈 Leak Risk Timeline</div>",
+            unsafe_allow_html=True
+        )
+        if not node_df.empty and len(node_df) > 1:
+            fig_risk = plot_risk_over_time(node_df, drill_node, threshold)
+            # Make it taller for drill-down view
+            fig_risk.update_layout(height=460)
+            st.plotly_chart(fig_risk, use_container_width=True,
+                            config={"displayModeBar": True})
+        elif len(node_df) == 1:
+            st.warning(
+                f"Node **{drill_node}** has only 1 timestep in this scenario. "
+                "This is a data artifact from how `feature_engineering.py` "
+                "samples one node per (scenario, time) step — this node "
+                "appears in very few rows. Try a different scenario or node."
+            )
+        else:
+            st.info("No data available for this node/scenario combination.")
 
-        stats = [
-            ("Alert State",       node_row["alert_state"],                         state_color),
-            ("Current Risk",      f"{node_row['current_smoothed']:.4f}",           "#00d4ff"),
-            ("Peak Probability",  f"{node_row['max_probability']:.4f}",            "#00ffcc"),
-            ("Duration Above Thr",f"{node_row['duration_above_threshold']} steps", "#ffd700"),
-            ("Sustained Alerts",  f"{sustained_count} timesteps",                  "#ff8080"),
-            ("First Alert",       first_alert,                                      "#7a9bb5"),
-            ("Last Alert",        last_alert,                                       "#7a9bb5"),
-            ("Monitoring Window", f"{time_span:.1f}h",                             "#4a6278"),
-        ]
-        for label, val, color in stats:
+    with stats_col:
+        st.markdown(
+            "<div class='section-header'>📋 Node Statistics</div>",
+            unsafe_allow_html=True
+        )
+
+        if not node_df.empty:
+            alert_events   = node_df[node_df["alert_active"]]["time"].values / 3600
+            sustained_count= int(node_df["alert_active"].sum())
+            first_alert    = f"{alert_events[0]:.1f}h"  if len(alert_events) > 0 else "None"
+            last_alert     = f"{alert_events[-1]:.1f}h" if len(alert_events) > 0 else "None"
+            time_span      = node_df["time"].max() / 3600
+            n_steps        = len(node_df)
+            frac_alert     = sustained_count / n_steps if n_steps > 0 else 0
+
+            stats = [
+                ("Alert State",        node_row["alert_state"],                          s_color),
+                ("Current Risk",       f"{node_row['current_smoothed']:.4f}",          "#00d4ff"),
+                ("Peak Probability",   f"{node_row['max_probability']:.4f}",           "#00ffcc"),
+                ("Duration Above Thr", f"{node_row['duration_above_threshold']} steps","#ffd700"),
+                ("Sustained Alerts",   f"{sustained_count} timesteps",                   "#ff8080"),
+                ("% Time in Alert",    f"{frac_alert*100:.1f}%",                         "#ff8080"),
+                ("First Alert",        first_alert,                                       "#7a9bb5"),
+                ("Last Alert",         last_alert,                                        "#7a9bb5"),
+                ("Total Timesteps",    str(n_steps),                                      "#4a6278"),
+                ("Monitoring Window",  f"{time_span:.1f}h",                               "#4a6278"),
+                ("Smoothing Window",   f"{smoothing_window} steps",                       "#4a6278"),
+                ("Threshold",          f"{threshold}",                                    "#4a6278"),
+            ]
+            for label, val, color in stats:
+                st.markdown(f"""
+                <div style='display:flex;justify-content:space-between;align-items:baseline;
+                padding:0.35rem 0;border-bottom:1px solid #1a2530;font-family:Space Mono;'>
+                  <span style='font-size:0.58rem;color:#4a6278;text-transform:uppercase;
+                  letter-spacing:0.05em'>{label}</span>
+                  <span style='font-size:0.72rem;color:{color};font-weight:600'>{val}</span>
+                </div>""", unsafe_allow_html=True)
+
+            # Risk bar
+            frac_disp = min(node_row["current_smoothed"], 1.0)
             st.markdown(f"""
-            <div style='display:flex;justify-content:space-between;align-items:baseline;
-            padding:0.35rem 0;border-bottom:1px solid #1a2530;font-family:Space Mono;'>
-              <span style='font-size:0.6rem;color:#4a6278;text-transform:uppercase;
-              letter-spacing:0.06em'>{label}</span>
-              <span style='font-size:0.72rem;color:{color};font-weight:600'>{val}</span>
-            </div>""", unsafe_allow_html=True)
+            <div style='margin-top:1.2rem;font-family:Space Mono;'>
+              <div style='font-size:0.6rem;color:#4a6278;text-transform:uppercase;
+              letter-spacing:0.08em;margin-bottom:0.5rem'>Risk Level</div>
+              <div style='background:#1e2d3d;border-radius:3px;height:8px;overflow:hidden;'>
+                <div style='background:{s_color};width:{frac_disp*100:.1f}%;
+                height:100%;border-radius:3px;'></div>
+              </div>
+              <div style='display:flex;justify-content:space-between;font-size:0.55rem;
+              color:#4a6278;margin-top:0.25rem'>
+                <span>0.0</span><span>Thr {threshold}</span><span>1.0</span>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        # Alert fraction bar
-        frac = min(node_row["current_smoothed"] / 1.0, 1.0)
-        bar_color = state_color
-        st.markdown(f"""
-        <div style='margin-top:1rem;font-family:Space Mono;'>
-          <div style='font-size:0.6rem;color:#4a6278;text-transform:uppercase;
-          letter-spacing:0.08em;margin-bottom:0.4rem'>Risk Level</div>
-          <div style='background:#1e2d3d;border-radius:3px;height:6px;overflow:hidden;'>
-            <div style='background:{bar_color};width:{frac*100:.1f}%;height:100%;
-            border-radius:3px;transition:width 0.3s'></div>
-          </div>
-          <div style='display:flex;justify-content:space-between;font-size:0.55rem;
-          color:#4a6278;margin-top:0.2rem'><span>0.0</span><span>0.5</span><span>1.0</span></div>
-        </div>
-        """, unsafe_allow_html=True)
+        # ── Alert timeline mini-chart ──
+        if not node_df.empty and len(node_df) > 1:
+            st.markdown(
+                "<div class='section-header' style='margin-top:1.5rem'>⏱ Alert Timeline</div>",
+                unsafe_allow_html=True
+            )
+            fig_mini = go.Figure()
+            fig_mini.add_trace(go.Scatter(
+                x=node_df["time"] / 3600,
+                y=node_df["risk_smoothed"],
+                mode="lines", line=dict(color="#00d4ff", width=1.5),
+                showlegend=False,
+                hovertemplate="t=%{x:.1f}h · risk=%{y:.3f}<extra></extra>",
+            ))
+            # Alert band
+            alert_mask_vals = node_df["alert_active"].astype(float).values
+            fig_mini.add_trace(go.Scatter(
+                x=node_df["time"] / 3600,
+                y=alert_mask_vals * node_df["risk_smoothed"].max(),
+                mode="lines", fill="tozeroy",
+                fillcolor="rgba(255,59,59,0.12)",
+                line=dict(color="rgba(255,59,59,0)", width=0),
+                showlegend=False,
+                hoverinfo="skip",
+            ))
+            fig_mini.add_hline(
+                y=threshold,
+                line=dict(color="#ffd700", width=1, dash="dot")
+            )
+            fig_mini.update_layout(
+                paper_bgcolor="#0a0e14", plot_bgcolor="#0f1620",
+                margin=dict(l=30, r=10, t=10, b=30), height=160,
+                xaxis=dict(gridcolor="#1e2d3d", linecolor="#1e2d3d",
+                           tickfont=dict(color="#7a9bb5", size=8),
+                           title=dict(text="Hours", font=dict(color="#7a9bb5", size=9))),
+                yaxis=dict(gridcolor="#1e2d3d", linecolor="#1e2d3d",
+                           tickfont=dict(color="#7a9bb5", size=8)),
+                hoverlabel=dict(bgcolor="#141c26", bordercolor="#1e2d3d",
+                                font=dict(color="#e8f4f8", size=10)),
+            )
+            st.plotly_chart(fig_mini, use_container_width=True,
+                            config={"displayModeBar": False})
+
+    # ── Bottom back button ──
+    st.markdown("<div style='height:0.5rem'></div>", unsafe_allow_html=True)
+    if st.button("← Back to Network Map", key="back_bottom"):
+        go_to_map()
+        st.rerun()
+
 
 # ── Footer ──
 st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
