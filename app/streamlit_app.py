@@ -1021,14 +1021,15 @@ if st.session_state.view == "map":
                 go_to_node(row["node"])
                 st.rerun()
 
-        st.markdown(
-            "<div class='section-header' style='margin-top:1rem'>📊 Risk Distribution</div>",
-            unsafe_allow_html=True
-        )
-        st.plotly_chart(
-            plot_risk_histogram(alert_panel_df, threshold),
-            use_container_width=True, config={"displayModeBar": False}
-        )
+    # ── Risk Distribution — full width, below the network map + alert queue ──
+    st.markdown("<div style='height:0.25rem'></div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='section-header'>📊 Network Risk Distribution — All Nodes</div>",
+        unsafe_allow_html=True
+    )
+    fig_hist = plot_risk_histogram(alert_panel_df, threshold)
+    fig_hist.update_layout(height=240)
+    st.plotly_chart(fig_hist, use_container_width=True, config={"displayModeBar": False})
 
 
 # ══════════════════════════════════════════════════════
