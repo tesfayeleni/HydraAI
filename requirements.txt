@@ -1,19 +1,9 @@
-# Core data + numerical stack
-pandas>=2.0.0
-numpy>=1.24.0
-
-# Machine learning
-scikit-learn>=1.3.0
-xgboost>=2.0.0
-
-# Model persistence
-joblib>=1.3.0
-
-# Water network simulation
-wntr>=1.1.0
-
-# Visualization
-matplotlib>=3.7.0
-
-# Web app dashboard
-streamlit>=1.28.0
+streamlit
+pandas
+numpy
+plotly
+xgboost
+scikit-learn
+joblib
+matplotlib
+wntr
