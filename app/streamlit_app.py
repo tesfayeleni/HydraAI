@@ -706,16 +706,19 @@ def plot_network_overview(wn, alert_panel_df, threshold, selected_node=None):
         # Highlight selected node
         marker_colors = []
         marker_sizes = []
-        marker_lines = []
+        marker_line_colors = []
+        marker_line_widths = []
         for n in names:
             if n == selected_node:
                 marker_colors.append("#ffffff")
                 marker_sizes.append(style["size"] + 6)
-                marker_lines.append(dict(color="#00d4ff", width=2.5))
+                marker_line_colors.append("#00d4ff")
+                marker_line_widths.append(2.5)
             else:
                 marker_colors.append(style["color"])
                 marker_sizes.append(style["size"])
-                marker_lines.append(dict(color=style["edge"], width=1))
+                marker_line_colors.append(style["edge"])
+                marker_line_widths.append(1)
 
         if xs:
             fig.add_trace(go.Scatter(
@@ -727,7 +730,10 @@ def plot_network_overview(wn, alert_panel_df, threshold, selected_node=None):
                 marker=dict(
                     color=marker_colors,
                     size=marker_sizes,
-                    line=marker_lines,
+                    line=dict(
+                        color=marker_line_colors,
+                        width=marker_line_widths,
+                    ),
                 ),
             ))
 
